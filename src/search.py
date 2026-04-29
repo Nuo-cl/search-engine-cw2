@@ -28,25 +28,19 @@ class SearchEngine:
     # ------------------------------------------------------------------
 
     def _generate_snippet(self, page_url: str, query_terms: list[str]) -> str:
+        """Return the full text of the first matching quote on the page."""
         page_data = self.indexer.pages.get(page_url, {})
         quotes = page_data.get("quotes", [])
 
         for quote in quotes:
             text_lower = quote["text"].lower()
             if any(term in text_lower for term in query_terms):
-                text = quote["text"]
-                if len(text) > 120:
-                    for term in query_terms:
-                        pos = text_lower.find(term)
-                        if pos != -1:
-                            start = max(0, pos - 40)
-                            end = min(len(text), pos + len(term) + 40)
-                            return "..." + text[start:end] + "..."
-                return text if len(text) <= 120 else text[:120] + "..."
+                author = quote.get("author", "")
+                attribution = f" — {author}" if author else ""
+                return quote["text"] + attribution
 
         if quotes:
-            text = quotes[0]["text"]
-            return text if len(text) <= 120 else text[:120] + "..."
+            return quotes[0]["text"]
         return ""
 
     # ------------------------------------------------------------------
