@@ -18,6 +18,7 @@ WORD_PATTERN = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
 class PostingEntry:
     tf: int = 0
     positions: list[int] = field(default_factory=list)
+    position_set: set[int] = field(default_factory=set)  # O(1) lookup for phrase matching
     tfidf: float = 0.0
 
 
@@ -105,6 +106,7 @@ class Indexer:
             posting = entry.postings[page_url]
             posting.tf += 1
             posting.positions.append(position)
+            posting.position_set.add(position)
 
     def _compute_tfidf(self) -> None:
         total_docs = len(self.pages)
@@ -196,9 +198,11 @@ class Indexer:
         for word, entry_data in data.get("index", {}).items():
             entry = IndexEntry(df=entry_data["df"])
             for page_url, posting_data in entry_data["postings"].items():
+                positions = posting_data["positions"]
                 entry.postings[page_url] = PostingEntry(
                     tf=posting_data["tf"],
-                    positions=posting_data["positions"],
+                    positions=positions,
+                    position_set=set(positions),
                     tfidf=posting_data["tfidf"],
                 )
             self.index[word] = entry

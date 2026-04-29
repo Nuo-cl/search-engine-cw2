@@ -65,14 +65,35 @@ class SearchEngine:
             return None
         return set(entry.postings.keys())
 
-    def _intersect_terms(self, terms: list[str]) -> set[str] | None:
-        """Return pages containing ALL terms, or None if any term is missing."""
+    def _intersect_terms_unoptimized(self, terms: list[str]) -> set[str] | None:
+        """Unoptimized: intersects in input order. Kept for benchmarking."""
         result: set[str] | None = None
         for term in terms:
             pages = self._pages_for_term(term)
             if pages is None:
                 return set()
             result = pages if result is None else result & pages
+        return result
+
+    def _intersect_terms(self, terms: list[str]) -> set[str] | None:
+        """Return pages containing ALL terms. O(min(|P_i|) * k)
+
+        Optimised: sorts term sets by size (smallest first) to minimise
+        intermediate set sizes during intersection.
+        """
+        term_sets: list[set[str]] = []
+        for term in terms:
+            pages = self._pages_for_term(term)
+            if pages is None:
+                return set()
+            term_sets.append(pages)
+
+        term_sets.sort(key=len)
+        result = term_sets[0]
+        for s in term_sets[1:]:
+            result = result & s
+            if not result:
+                return set()
         return result
 
     def _union_terms(self, terms: list[str]) -> set[str]:
@@ -88,8 +109,8 @@ class SearchEngine:
     # Phrase matching
     # ------------------------------------------------------------------
 
-    def _check_phrase_on_page(self, page_url: str, phrase_words: list[str]) -> bool:
-        """Check if phrase_words appear consecutively on the page using position data."""
+    def _check_phrase_on_page_unoptimized(self, page_url: str, phrase_words: list[str]) -> bool:
+        """Unoptimized: uses list `in` check O(n) per position. Kept for benchmarking."""
         if not phrase_words:
             return True
 
@@ -107,6 +128,35 @@ class SearchEngine:
                     match = False
                     break
                 if (start_pos + offset) not in entry.postings[page_url].positions:
+                    match = False
+                    break
+            if match:
+                return True
+        return False
+
+    def _check_phrase_on_page(self, page_url: str, phrase_words: list[str]) -> bool:
+        """Check consecutive word positions using position_set for O(1) lookup.
+
+        Complexity: O(S * L) where S = start positions count, L = phrase length.
+        Each position check is O(1) via set lookup instead of O(n) list scan.
+        """
+        if not phrase_words:
+            return True
+
+        first_entry = self.indexer.get_entry(phrase_words[0])
+        if not first_entry or page_url not in first_entry.postings:
+            return False
+
+        start_positions = first_entry.postings[page_url].positions
+
+        for start_pos in start_positions:
+            match = True
+            for offset, word in enumerate(phrase_words[1:], start=1):
+                entry = self.indexer.get_entry(word)
+                if not entry or page_url not in entry.postings:
+                    match = False
+                    break
+                if (start_pos + offset) not in entry.postings[page_url].position_set:
                     match = False
                     break
             if match:
