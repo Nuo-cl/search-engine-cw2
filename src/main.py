@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 class SearchEngineCLI:
-    def __init__(self, index_path: Path = DEFAULT_INDEX_PATH) -> None:
+    def __init__(
+        self,
+        index_path: Path = DEFAULT_INDEX_PATH,
+        interactive: bool = True,
+    ) -> None:
         self.indexer = Indexer()
         self.storage = Storage(path=index_path)
         self.search_engine = SearchEngine(self.indexer)
@@ -39,13 +43,15 @@ class SearchEngineCLI:
         self.spell_checker: SpellChecker | None = None
         self.trie: Trie | None = None
         self._index_loaded = False
+        self.session: PromptSession | None = None
 
-        HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self.session: PromptSession = PromptSession(
-            history=FileHistory(str(HISTORY_PATH)),
-            completer=self.completer,
-            complete_while_typing=True,
-        )
+        if interactive:
+            HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self.session = PromptSession(
+                history=FileHistory(str(HISTORY_PATH)),
+                completer=self.completer,
+                complete_while_typing=True,
+            )
 
     def _rebuild_helpers(self) -> None:
         """Rebuild Trie and SpellChecker after index load/build."""
@@ -240,7 +246,10 @@ class SearchEngineCLI:
 
         while True:
             try:
-                line = self.session.prompt("Search Engine > ")
+                if self.session:
+                    line = self.session.prompt("Search Engine > ")
+                else:
+                    line = input("Search Engine > ")
                 if not self._parse_and_dispatch(line):
                     break
             except (EOFError, KeyboardInterrupt):
