@@ -61,7 +61,10 @@ class SearchCompleter(Completer):
             prefix = word.lower()
             for author in self.author_list:
                 if author.startswith(prefix):
-                    yield Completion(author, start_position=-len(word))
+                    # Wrap multi-word names in quotes
+                    display = author
+                    completion = f'"{author}"' if " " in author else author
+                    yield Completion(completion, start_position=-len(word), display=display)
             return
 
         parts = text.split()
@@ -281,7 +284,8 @@ class RichUI:
         syntax_table.add_row('find love OR hate', "OR search (either word)")
         syntax_table.add_row('find love -war', "Exclude pages with 'war'")
         syntax_table.add_row('find --tag love', "Filter by tag")
-        syntax_table.add_row('find --author einstein', "Filter by author")
+        syntax_table.add_row('find --author einstein', "Filter by author (partial match)")
+        syntax_table.add_row('find --author "albert einstein"', "Multi-word author (use quotes)")
         syntax_table.add_row('find love --tag life', "Combine text + tag filter")
         console.print(syntax_table)
         console.print()
